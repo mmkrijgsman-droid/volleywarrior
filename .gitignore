@@ -22,5 +22,10 @@ npm-debug.log*
 # APK builds
 *.apk
 
+# Docs (local only)
+CLAUDE.md
+BOUWEN.md
+testopstellingopenen.md
+
 # Claude Code
 .claude/
