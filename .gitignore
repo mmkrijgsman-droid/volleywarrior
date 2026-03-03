@@ -1,0 +1,26 @@
+node_modules/
+dist/
+.DS_Store
+*.local
+
+# Android build artifacts
+android/app/build/
+android/.gradle/
+android/build/
+android/local.properties
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs
+*.log
+npm-debug.log*
+
+# APK builds
+*.apk
+
+# Claude Code
+.claude/
