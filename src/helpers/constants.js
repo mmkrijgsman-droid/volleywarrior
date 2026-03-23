@@ -14,3 +14,13 @@ export const TABS = [
 ];
 
 export const shirtColors = { home:'#dc2626', away:'#2563eb', libero:'#475569' };
+
+// Pro Mode constants
+export const RECEPTION_QUALITY = ['A', 'B', 'C'];
+export const RECEPTION_LABELS = { A: 'Perfect', B: 'OK', C: 'Slecht' };
+export const ERROR_SUBTYPES = [
+  { key: 'attack', label: 'Aanvalsfout' },
+  { key: 'reception', label: 'Receptiefout' },
+  { key: 'other', label: 'Overig' },
+];
+export const SERVE_ZONES = [5, 6, 1, 4, 3, 2]; // display order (top-left to bottom-right)

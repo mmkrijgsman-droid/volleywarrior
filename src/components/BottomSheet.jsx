@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { ChevronIcon, XIcon } from './Icons';
-
-export default function BottomSheet({ open, onClose, title, children, snapPoints = [0.4, 0.85] }) {
+export default function BottomSheet({ open, onClose, title, children, snapPoints = [0.4, 0.85], onSwipeLeft, onSwipeRight }) {
   const [snapIdx, setSnapIdx] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [dragDelta, setDragDelta] = useState(0);
   const startY = useRef(null);
   const sheetRef = useRef(null);
+  const swipeStartX = useRef(null);
+  const swipeStartY = useRef(null);
 
   const currentSnap = snapPoints[snapIdx];
   const targetHeight = `${currentSnap * 100}vh`;
@@ -35,18 +35,12 @@ export default function BottomSheet({ open, onClose, title, children, snapPoints
     startY.current = null;
   };
 
-  const cycleSnap = () => {
-    if (snapIdx < snapPoints.length - 1) setSnapIdx(i => i + 1);
-    else setSnapIdx(0);
-  };
-
   const wasOpen = useRef(false);
   useEffect(() => {
     if (open && !wasOpen.current) setSnapIdx(1);
     wasOpen.current = open;
   }, [open, title]);
 
-  const translateY = isDragging ? `calc(${dragDelta}px)` : '0px';
   const sheetHeight = isDragging
     ? `calc(${targetHeight} - ${dragDelta}px)`
     : targetHeight;
@@ -76,11 +70,13 @@ export default function BottomSheet({ open, onClose, title, children, snapPoints
           flexDirection: 'column',
           height: open ? sheetHeight : '0px',
           minHeight: open ? '120px' : '0px',
-          transform: open ? `translateY(${translateY})` : 'translateY(100%)',
+          transform: open ? 'none' : 'translateY(100%)',
           transition: isDragging ? 'none' : 'height 0.35s cubic-bezier(0.32,0.72,0,1), transform 0.35s cubic-bezier(0.32,0.72,0,1)',
-          background: 'linear-gradient(180deg, #1a1a1a 0%, #111 100%)',
+          background: 'rgba(255,255,255,0.85)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
           borderRadius: '20px 20px 0 0',
-          boxShadow: '0 -4px 40px rgba(220,38,38,0.25), 0 -1px 0 rgba(220,38,38,0.4)',
+          boxShadow: '0 -4px 40px rgba(0,0,0,0.1), 0 -1px 0 rgba(220,38,38,0.2)',
           overflow: 'hidden',
         }}
       >
@@ -94,29 +90,15 @@ export default function BottomSheet({ open, onClose, title, children, snapPoints
         >
           <div style={{
             width: 40, height: 4,
-            background: 'rgba(220,38,38,0.6)',
+            background: 'rgba(220,38,38,0.5)',
             borderRadius: 2,
             marginBottom: 8
           }} />
           <div className="flex items-center justify-between w-full px-4 pb-2"
-            style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>
-            <span style={{ color: '#e5e7eb', fontSize: 15, fontWeight: 700, letterSpacing: '0.02em' }}>
+            style={{ borderBottom: '1px solid rgba(0,0,0,0.06)' }}>
+            <span style={{ color: '#1e293b', fontSize: 15, fontWeight: 700, letterSpacing: '0.02em' }}>
               {title}
             </span>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={cycleSnap}
-                style={{ color: '#9ca3af', padding: '4px', borderRadius: 8 }}
-              >
-                <ChevronIcon up={snapIdx < snapPoints.length - 1} />
-              </button>
-              <button
-                onClick={onClose}
-                style={{ color: '#9ca3af', padding: '4px', borderRadius: 8 }}
-              >
-                <XIcon size={20} />
-              </button>
-            </div>
           </div>
         </div>
 
@@ -125,8 +107,24 @@ export default function BottomSheet({ open, onClose, title, children, snapPoints
           flex: 1,
           overflowY: 'auto',
           WebkitOverflowScrolling: 'touch',
-          padding: '12px 16px 24px',
-        }}>
+          padding: '12px 16px 80px',
+        }}
+          onTouchStart={(e) => {
+            swipeStartX.current = e.touches[0].clientX;
+            swipeStartY.current = e.touches[0].clientY;
+          }}
+          onTouchEnd={(e) => {
+            if (swipeStartX.current === null) return;
+            const dx = e.changedTouches[0].clientX - swipeStartX.current;
+            const dy = e.changedTouches[0].clientY - swipeStartY.current;
+            if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+              if (dx < 0 && onSwipeLeft) onSwipeLeft();
+              else if (dx > 0 && onSwipeRight) onSwipeRight();
+            }
+            swipeStartX.current = null;
+            swipeStartY.current = null;
+          }}
+        >
           {children}
         </div>
       </div>
