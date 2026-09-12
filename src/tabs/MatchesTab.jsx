@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { generateMatchPDF } from '../helpers/pdfExport';
+import { buildMatchReport } from '../helpers/matchReport';
 
 export default function MatchesTab({ homeScore, awayScore, sets, opponentName, savedMatches, loadMatch, setShowNewMatchDialog, teamName, players, forceEndMatch, matchEnded, deleteMatch }) {
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
+  const [report, setReport] = useState(null);
 
-  const downloadPDF = (m) => {
+  const downloadPDF = async (m) => {
+    // jspdf + html2canvas lazy laden: alleen bij export, niet in de hoofd-bundle.
+    const { generateMatchPDF } = await import('../helpers/pdfExport');
     generateMatchPDF({
       sets: m.finalScore,
       matchWinner: m.winner,
@@ -64,6 +67,11 @@ export default function MatchesTab({ homeScore, awayScore, sets, opponentName, s
                   <img src="/icons/set.svg" alt="" style={{ width:14, height:14 }} /> PDF
                 </button>
                 <button
+                  onClick={() => setReport(buildMatchReport(m, players, teamName || 'Ons team'))}
+                  style={{ background:'rgba(0,0,0,0.03)', color:'#374151', border:'1px solid rgba(0,0,0,0.1)', borderRadius:6, padding:'4px 12px', fontSize:11, fontWeight:600, cursor:'pointer' }}>
+                  📝 Verslag
+                </button>
+                <button
                   onClick={() => loadMatch(m)}
                   style={{ background:'rgba(59,130,246,0.08)', color:'#2563eb', border:'1px solid rgba(59,130,246,0.3)', borderRadius:6, padding:'4px 12px', fontSize:11, fontWeight:600, cursor:'pointer' }}>
                   📊 Bekijk
@@ -85,6 +93,27 @@ export default function MatchesTab({ homeScore, awayScore, sets, opponentName, s
             </div>
           </div>
         ))
+      )}
+
+      {report != null && (
+        <div onClick={() => setReport(null)}
+          style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.45)', backdropFilter:'blur(4px)', WebkitBackdropFilter:'blur(4px)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:200, padding:16 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background:'#fff', border:'1px solid rgba(220,38,38,0.15)', borderRadius:16, boxShadow:'0 20px 60px rgba(0,0,0,0.3)', maxWidth:420, width:'100%', maxHeight:'85vh', display:'flex', flexDirection:'column' }}>
+            <div style={{ padding:'16px 18px 10px', fontWeight:800, fontSize:15, color:'#1e293b' }}>Wedstrijdverslag</div>
+            <div style={{ padding:'0 18px', overflowY:'auto', whiteSpace:'pre-wrap', fontSize:13, lineHeight:1.5, color:'#374151' }}>{report}</div>
+            <div style={{ display:'flex', gap:8, padding:16 }}>
+              <button onClick={() => { try { navigator.clipboard?.writeText(report); } catch (_) {} }}
+                style={{ flex:1, background:'rgba(220,38,38,0.1)', color:'#dc2626', border:'1px solid rgba(220,38,38,0.3)', borderRadius:10, padding:10, fontWeight:700, cursor:'pointer', fontSize:13 }}>
+                Kopieer
+              </button>
+              <button onClick={() => setReport(null)}
+                style={{ flex:1, background:'#f3f4f6', color:'#6b7280', border:'1px solid #e5e7eb', borderRadius:10, padding:10, fontWeight:700, cursor:'pointer', fontSize:13 }}>
+                Sluiten
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

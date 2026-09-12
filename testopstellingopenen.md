@@ -15,3 +15,4 @@ Start-Process "C:\Program Files\Google\Chrome\Application\chrome.exe" -ArgumentL
 
 of ander claude vragen de 'chrome mcp server' op te starten, dan regelt ie 't wss zelf wel
 
+1

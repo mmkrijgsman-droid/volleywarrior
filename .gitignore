@@ -29,3 +29,8 @@ testopstellingopenen.md
 
 # Claude Code
 .claude/
+
+.vercel
+
+# MCP-server datastore (lokale wedstrijddata)
+mcp-server/data/

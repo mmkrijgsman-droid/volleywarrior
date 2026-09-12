@@ -1,9 +1,26 @@
 import { useState } from 'react';
 import { getRoleLabel } from '../helpers/constants';
 import { isDwfAvailable } from '../helpers/dwfImport';
+import { aggregateSeason } from '../helpers/season';
+import { suggestLineup } from '../helpers/autoLineup';
 
-export default function LineupTab({ players, homeLineup, awayLineup, updateLineup, teamName, setTeamName, opponentName, setOpponentName, confirmLineup, formationSystem, switchFormation, opponentPlayers, setShowDwfImportModal }) {
+export default function LineupTab({ players, homeLineup, awayLineup, updateLineup, setHomeLineup, savedMatches = [], teamName, setTeamName, opponentName, setOpponentName, confirmLineup, formationSystem, switchFormation, opponentPlayers, setShowDwfImportModal }) {
   const [showLibero42, setShowLibero42] = useState(false);
+  const [autoNote, setAutoNote] = useState(null);
+
+  const applyAutoLineup = () => {
+    const season = aggregateSeason(savedMatches, players);
+    const scoreById = {};
+    for (const p of season.players) scoreById[p.id] = p.total;
+    const { lineup, fallbackPositions, hasScores } = suggestLineup({ players, scoreById, system: formationSystem });
+    setHomeLineup(l => ({ ...l, ...lineup }));
+    const base = hasScores
+      ? 'Opstelling op basis van seizoensprestatie.'
+      : 'Nog geen seizoensdata — opstelling op rol en rugnummer.';
+    setAutoNote(fallbackPositions.length
+      ? `${base} Let op: te weinig spelers voor sommige rollen (pos ${fallbackPositions.join(', ')}) — check even.`
+      : base);
+  };
 
   return (
     <div>
@@ -39,7 +56,16 @@ export default function LineupTab({ players, homeLineup, awayLineup, updateLineu
             style={{ width:'100%', background:'#f9fafb', border:'1px solid #e5e7eb', borderRadius:8, padding:'8px 10px', color:'#1e293b', fontSize:13, boxSizing:'border-box' }}/>
         </div>
       </div>
-      <div style={{ color:'#dc2626', fontWeight:600, fontSize:13, marginBottom:8 }}>Ons Team</div>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+        <div style={{ color:'#dc2626', fontWeight:600, fontSize:13 }}>Ons Team</div>
+        <button onClick={applyAutoLineup}
+          style={{ background:'rgba(234,179,8,0.12)', color:'#a16207', border:'1px solid rgba(234,179,8,0.35)', borderRadius:8, padding:'5px 10px', fontSize:12, fontWeight:700, cursor:'pointer', display:'flex', alignItems:'center', gap:4 }}>
+          ⚡ Auto-opstelling
+        </button>
+      </div>
+      {autoNote && (
+        <div style={{ background:'rgba(234,179,8,0.06)', border:'1px solid rgba(234,179,8,0.25)', borderRadius:8, padding:'6px 10px', marginBottom:8, fontSize:11, color:'#92400e' }}>{autoNote}</div>
+      )}
       {[1,2,3,4,5,6].map(pos => (
         <div key={pos} style={{ display:'flex', alignItems:'center', gap:8, marginBottom:6 }}>
           <span style={{ color:'#6b7280', fontSize:12, width:35, flexShrink:0 }}>Pos {pos}</span>

@@ -1,0 +1,14 @@
+{
+  "name": "VolleyWarrior",
+  "short_name": "VolleyWarrior",
+  "description": "Volleybal wedstrijd-tracker: stand, opstelling, wissels en statistieken.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#ffffff",
+  "theme_color": "#dc2626",
+  "icons": [
+    { "src": "/VWicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

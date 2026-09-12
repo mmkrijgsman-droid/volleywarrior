@@ -1,4 +1,3 @@
-import { getRoleLabel } from '../helpers/constants';
 import { isDwfAvailable } from '../helpers/dwfImport';
 
 export default function PlayersTab({ players, updatePlayer, addPlayer, setPlayers, homeColor, setHomeColor, awayColor, setAwayColor, setShowDwfImportModal }) {

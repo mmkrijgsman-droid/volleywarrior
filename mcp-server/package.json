@@ -1,0 +1,23 @@
+{
+  "name": "volleywarrior-mcp",
+  "version": "1.0.0",
+  "description": "MCP server voor VolleyWarrior: live-brug naar de app, wedstrijdanalyse, Nevobo/DWF en build-tools",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "volleywarrior-mcp": "src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "test": "node test/run-tests.mjs",
+    "test:steps": "node test/bridge-steps.mjs",
+    "test:e2e": "node test/e2e-browser.mjs",
+    "test:all": "npm test && npm run test:steps"
+  },
+  "license": "ISC",
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "ws": "^8.21.3",
+    "zod": "^4.5.2"
+  }
+}

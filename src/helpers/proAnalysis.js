@@ -2,20 +2,8 @@
  * Pro Mode analysis functions — shared between StatsTab, LiveDashboard, pdfExport
  */
 
-// Determine scoring team from heatmap entry
-function getScoringTeam(d) {
-  if (d.type === 'block') return d.team === 'home' ? 'away' : 'home';
-  if (d.type === 'servicefault') return d.team; // scoringTeam was stored as d.team
-  return d.team === 'home' ? 'home' : d.team; // for direct/sideout/attack/error: clickedTeam = scoring side in most cases
-  // Actually: for errors, the OPPONENT scores. For all other types, the clicked team scores.
-}
-
-// Better: use the pattern from processPoint — type=error means the clicked team gave the point away
-// In heatmapData, d.team is the clickedTeam. For scoring:
-// - direct/sideout/attack: scoringTeam = clickedTeam
-// - block: scoringTeam = opposite of clickedTeam
-// - error: scoringTeam = clickedTeam (the user clicked the scoring team's half)
-// - servicefault: scoringTeam = d.team (set in confirmServiceFault)
+// In heatmapData, d.team is the clickedTeam, which IS the scoring team for every
+// point type except a block (where the opponent of the clicked side scores).
 function inferScoringTeam(d) {
   if (d.type === 'block') return d.team === 'home' ? 'away' : 'home';
   return d.team; // for all other types, d.team IS the scoring team

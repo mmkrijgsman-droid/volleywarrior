@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 
 export default function useMatchState() {
-  const [menuOpen, setMenuOpen] = useState(false);
   const [bottomSheetOpen, setBottomSheetOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('players');
   const [isMobile, setIsMobile] = useState(false);
@@ -44,7 +43,9 @@ export default function useMatchState() {
   const [showPointTypePopup, setShowPointTypePopup] = useState(null);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [showNewMatchDialog, setShowNewMatchDialog] = useState(false);
-  const [savedMatches, setSavedMatches] = useState([]);
+  const [savedMatches, setSavedMatches] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('volleyballMatches') || '[]'); } catch { return []; }
+  });
   const [pointStats, setPointStats] = useState({
     home: { direct:0, sideout:0, block:0, attack:0, error:0 },
     away: { direct:0, sideout:0, block:0, attack:0, error:0 },
@@ -69,17 +70,20 @@ export default function useMatchState() {
   const [proMode, setProMode] = useState(false);
   const [showProPanel, setShowProPanel] = useState(null);
 
-  // Pro mode: get current rotation (setter position 1-6)
+  // Pro mode: huidige rotatie (1-6). In 5-1 is dat de positie van de enige
+  // spelverdeler; in 4-2 (twee spelverdelers, 3 posities uit elkaar) nemen we de
+  // achterste spelverdeler als referentie, zodat de rotatie-analyse ook daar
+  // werkt in plaats van null terug te geven.
   const getRotation = () => {
-    let found = null;
+    const setterPositions = [];
     for (let pos = 1; pos <= 6; pos++) {
       const p = players.find(pl => pl.id === homeLineup[pos]);
-      if (p?.role === 'setter') {
-        if (found !== null) return null; // 4-2: two setters
-        found = pos;
-      }
+      if (p?.role === 'setter') setterPositions.push(pos);
     }
-    return found;
+    if (setterPositions.length === 0) return null;
+    if (setterPositions.length === 1) return setterPositions[0]; // 5-1
+    const backRow = [1, 6, 5];
+    return setterPositions.find(pos => backRow.includes(pos)) ?? setterPositions[0];
   };
 
   // Pro mode: patch last heatmap entry with Pro data
@@ -379,13 +383,22 @@ export default function useMatchState() {
     if (newHome >= target && newHome - newAway >= 2) { endSet('home', newHome, newAway); setEndedNow = true; }
     else if (newAway >= target && newAway - newHome >= 2) { endSet('away', newHome, newAway); setEndedNow = true; }
 
-    // Pro panel: show after point if applicable
+    // Pro paneel na elk punt (in Pro-modus), zodat ook breekpunten hun service-
+    // zone/receptie kunnen vastleggen. Het paneel toont alleen de relevante
+    // secties en is met 'Sla over' weg te tikken.
     if (proMode && !setEndedNow) {
       const isError = type === 'error';
-      if (isSideout || isError) {
-        setShowProPanel({ pointType: type, scoringTeam, servingTeam, isSideout, isError });
-      }
+      setShowProPanel({ pointType: type, scoringTeam, servingTeam, isSideout, isError });
     }
+  };
+
+  // Popup-loos scoren (voor de brug en stemcommando's): bepaalt zelf het
+  // scorende team op basis van het type en registreert het punt meteen.
+  const scoreDirect = (clickedTeam, type, playerId = null) => {
+    if (setEnded || matchEnded) return;
+    const scoringTeam = type === 'block' ? (clickedTeam === 'home' ? 'away' : 'home') : clickedTeam;
+    const heatmapY = type === 'block' ? (clickedTeam === 'home' ? 95 : 5) : 50;
+    processPoint(trackPlayerStats ? playerId : null, { team: clickedTeam, type, x: 50, heatmapY, scoringTeam });
   };
 
   const startNewSet = (keepLineup) => {
@@ -630,6 +643,37 @@ export default function useMatchState() {
     }
   };
 
+  // Corrigeer de speler aan wie een punt is toegeschreven (courtside-vergissing:
+  // verkeerde speler aangetikt, een paar punten terug). Verplaatst alleen de
+  // speler-statistiek; stand, rotatie en servicebeurt blijven ongemoeid.
+  const correctPointPlayer = (index, newPlayerId) => {
+    const entry = scoreHistory[index];
+    if (!entry) return;
+    const oldPlayerId = entry.playerId ?? null;
+    if (oldPlayerId === newPlayerId) return;
+    const type = entry.type;
+    const statKey = type === 'servicefault' ? 'servicefault' : type;
+
+    setPlayerStats(prev => {
+      const next = { ...prev };
+      if (oldPlayerId != null && next[oldPlayerId]) {
+        next[oldPlayerId] = { ...next[oldPlayerId], [statKey]: Math.max(0, (next[oldPlayerId][statKey] || 0) - 1) };
+      }
+      if (newPlayerId != null) {
+        const cur = next[newPlayerId] || { direct:0, sideout:0, block:0, attack:0, error:0, servicefault:0 };
+        next[newPlayerId] = { ...cur, [statKey]: (cur[statKey] || 0) + 1 };
+      }
+      return next;
+    });
+
+    setScoreHistory(h => h.map((e, i) => i === index ? { ...e, playerId: newPlayerId } : e));
+    setHeatmapData(h => h.map((e, i) => {
+      if (i !== index) return e;
+      const playerPos = type === 'direct' ? 1 : findSlot(newPlayerId);
+      return { ...e, playerId: newPlayerId, playerPos };
+    }));
+  };
+
   const fieldPlayers = Object.values(homeLineup).slice(0,6);
   const benchPlayers = players.filter(p => !fieldPlayers.includes(p.id) && p.id !== homeLineup.libero);
 
@@ -646,8 +690,8 @@ export default function useMatchState() {
     heatmapData, savedHeatmaps, showHeatmapOverlay, setShowHeatmapOverlay,
     setEnded, matchEnded, setWinner, matchWinner,
     // Match actions
-    scorePoint, confirmPointType, confirmPlayerSelect, endSet, startNewSet,
-    serviceFault, confirmServiceFault, takeTimeout, undoLastPoint,
+    scorePoint, scoreDirect, confirmPointType, confirmPlayerSelect, endSet, startNewSet,
+    serviceFault, confirmServiceFault, takeTimeout, undoLastPoint, correctPointPlayer,
     // Substitution
     substitutions, substitutionMode, setSubstitutionMode,
     selectedBenchPlayer, setSelectedBenchPlayer, makeSubstitution,

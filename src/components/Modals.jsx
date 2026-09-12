@@ -1,6 +1,8 @@
-import { shirtColors, getRoleLabel } from '../helpers/constants';
-import { generateMatchPDF } from '../helpers/pdfExport';
+import { getRoleLabel } from '../helpers/constants';
 import DwfImportModal from './DwfImportModal';
+import DataBackup from './DataBackup';
+import TeamSetup from './TeamSetup';
+import FixturePicker from './FixturePicker';
 import { LOGO_SRC } from '../assets/logo';
 
 // Shared popup styles — white background, red/grey accents
@@ -24,8 +26,7 @@ export default function Modals({ state }) {
     showNewMatchDialog, matchDate, setMatchDate, confirmNewMatch,
     substitutionMode, setSubstitutionMode, setSelectedBenchPlayer,
     servingTeam,
-    showPlayerSelectPopup, setShowPlayerSelectPopup, confirmPlayerSelect,
-    homeLineup, awayLineup, players, teamName,
+    players, teamName,
     showSettingsModal, setShowSettingsModal,
     trackPlayerStats, setTrackPlayerStats,
     trackOpponentStats, setTrackOpponentStats,
@@ -184,7 +185,7 @@ export default function Modals({ state }) {
               <button onClick={()=>{setShowSaveDialog(false);setShowNewMatchDialog(true);}}
                 style={{ flex:1, background:'#f3f4f6', color:'#6b7280', border:'1px solid #e5e7eb', borderRadius:10, padding:12, cursor:'pointer', fontWeight:600 }}>Sla over</button>
             </div>
-            <button onClick={() => generateMatchPDF({ sets, matchWinner, opponentName, teamName, matchDate, savedHeatmaps, pointStats, playerStats, players, substitutions, formationSystem, trackOpponentStats })}
+            <button onClick={async () => { const { generateMatchPDF } = await import('../helpers/pdfExport'); generateMatchPDF({ sets, matchWinner, opponentName, teamName, matchDate, savedHeatmaps, pointStats, playerStats, players, substitutions, formationSystem, trackOpponentStats }); }}
               style={{ width:'100%', marginTop:10, background:'#f3f4f6', color:'#6b7280', border:'1px solid #e5e7eb', borderRadius:10, padding:12, fontWeight:700, cursor:'pointer', fontSize:14 }}>📄 PDF Downloaden</button>
           </div>
         </div>
@@ -195,6 +196,7 @@ export default function Modals({ state }) {
         <div style={overlay}>
           <div style={{ ...cardPadWide }}>
             <div style={{ fontWeight:800, fontSize:18, color:'#1e293b', marginBottom:16 }}>Nieuwe Wedstrijd</div>
+            <FixturePicker onPick={(opp, date) => { setOpponentName(opp); if (date) setMatchDate(date); }} />
             <label style={{ color:'#6b7280', fontSize:12, display:'block', marginBottom:4 }}>Tegenstander</label>
             <input value={opponentName} onChange={e=>setOpponentName(e.target.value)} placeholder="Naam tegenstander"
               style={{ width:'100%', background:'#f9fafb', border:'1px solid #e5e7eb', borderRadius:8, padding:'9px 12px', color:'#1e293b', fontSize:13, marginBottom:12, boxSizing:'border-box' }}/>
@@ -223,7 +225,7 @@ export default function Modals({ state }) {
       {/* Settings modal */}
       {showSettingsModal && (
         <div style={overlay}>
-          <div style={{ ...card, maxWidth:340, padding:'28px 24px' }}>
+          <div style={{ ...card, maxWidth:340, padding:'28px 24px', maxHeight:'88vh', overflowY:'auto' }}>
             <div style={{ textAlign:'center', fontWeight:800, fontSize:18, color:'#1e293b', marginBottom:24 }}>Instellingen</div>
 
             {/* Pro Mode toggle */}
@@ -262,6 +264,10 @@ export default function Modals({ state }) {
                 <div style={{ color:'#9ca3af', fontSize:12, marginBottom:16, paddingLeft:16 }}>Speler-selectie ook voor tegenstander punten</div>
               </>
             )}
+
+            <TeamSetup />
+
+            <DataBackup />
 
             <button onClick={() => setShowSettingsModal(false)}
               style={{ width:'100%', marginTop:8, background:'rgba(220,38,38,0.1)', color:'#dc2626', border:'1px solid rgba(220,38,38,0.25)', borderRadius:10, padding:12, fontWeight:700, cursor:'pointer', fontSize:14 }}>
@@ -308,7 +314,7 @@ export default function Modals({ state }) {
           <div style={{ ...card, maxWidth:320, padding:'24px 20px', textAlign:'center' }}>
             <img src={LOGO_SRC} alt="VolleyWarrior" style={{ width:64, height:64, borderRadius:14, margin:'0 auto 12px', display:'block', boxShadow:'0 4px 16px rgba(0,0,0,0.1)' }} />
             <div style={{ fontWeight:800, fontSize:20, color:'#1e293b', marginBottom:2 }}>VolleyWarrior</div>
-            <div style={{ color:'#6b7280', fontSize:12, marginBottom:16 }}>Versie 10</div>
+            <div style={{ color:'#6b7280', fontSize:12, marginBottom:16 }}>Versie 18</div>
 
             <div style={{ background:'#f9fafb', border:'1px solid #e5e7eb', borderRadius:10, padding:'12px 14px', marginBottom:12, textAlign:'left' }}>
               <div style={{ color:'#374151', fontSize:12, fontWeight:700, marginBottom:6 }}>Databronnen</div>
@@ -346,98 +352,6 @@ export default function Modals({ state }) {
         />
       )}
 
-      {/* Player select popup */}
-      {showPlayerSelectPopup && (() => {
-        const { scoringTeam, type } = showPlayerSelectPopup;
-        const isHome = scoringTeam === 'home';
-        const ico = (n,s=18) => <img src={`/icons/${n}.svg`} alt="" style={{ width:s, height:s, verticalAlign:'middle', marginRight:4 }} />;
-        const typeLabels = { direct:<>{ico('ace')}Ace</>, sideout:<>{ico('sideout')}Sideout</>, block:<>{ico('blok')}Blok</>, attack:<>{ico('aanval')}Aanval</>, error:<>{ico('fout')}Fout</> };
-
-        // Select player on court instead of popup (both teams)
-        return null;
-
-        // Legacy role-button popup (unused)
-        if (!isHome) {
-          const roles = [
-            { id:'opp_setter',   role:'setter',   label:'Spelverdeler', short:'SPE', color:'#dc2626' },
-            { id:'opp_outside',  role:'outside',   label:'Passerloper',  short:'PL',  color:'#6b7280' },
-            { id:'opp_middle',   role:'middle',   label:'Midden',       short:'MID', color:'#6b7280' },
-            { id:'opp_opposite', role:'opposite', label:'Diagonaal',    short:'DIA', color:'#6b7280' },
-            { id:'opp_libero',   role:'libero',   label:'Libero',       short:'L',   color:'#6b7280' },
-          ];
-          return (
-            <div style={overlay}>
-              <div style={cardPad}>
-                <div style={title}>Welke positie?</div>
-                <div style={subtitle}>
-                  {typeLabels[type] || type} — <span style={{color:'#3b82f6'}}>●</span> {opponentName||'Tegenstander'}
-                </div>
-                <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-                  {roles.map(r => (
-                    <button key={r.id} onClick={() => confirmPlayerSelect(r.id)}
-                      style={{ background:'#f3f4f6', border:'1px solid #e5e7eb', borderRadius:12, padding:'12px 14px', cursor:'pointer', display:'flex', alignItems:'center', gap:12 }}>
-                      <span style={{ background:`${r.color}18`, color:r.color, borderRadius:6, padding:'2px 8px', fontSize:13, fontWeight:800, minWidth:36, textAlign:'center' }}>{r.short}</span>
-                      <span style={{ color:'#374151', fontSize:14, fontWeight:600 }}>{r.label}</span>
-                    </button>
-                  ))}
-                </div>
-                <button onClick={() => setShowPlayerSelectPopup(null)} style={btnCancel}>
-                  <img src="/icons/annuleer.svg" alt="" style={{ width:16, height:16 }} /> Annuleer
-                </button>
-              </div>
-            </div>
-          );
-        }
-
-        // Home: show player shirts (existing behavior)
-        const lineup = homeLineup;
-        const fieldPlayers = [1,2,3,4,5,6].map(pos => {
-          let id = lineup[pos];
-          if (homeLineup.libero) {
-            const pd = players.find(p => p.id === id);
-            if (pd?.role === 'middle' && (pos === 5 || pos === 6)) {
-              id = homeLineup.libero;
-            }
-          }
-          const player = players.find(p => p.id === id);
-          return { pos, id, player };
-        });
-        return (
-          <div style={overlay}>
-            <div style={cardPad}>
-              <div style={title}>Welke speler?</div>
-              <div style={subtitle}>
-                {typeLabels[type] || type} — <span style={{color:'#dc2626'}}>●</span> {teamName||'Ons Team'}
-              </div>
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr 1fr', gap:10 }}>
-                {fieldPlayers.map(({ pos, id, player }) => {
-                  const color = player?.isLibero ? shirtColors.libero : (state.homeColor || shirtColors.home);
-                  return (
-                    <button key={pos} onClick={() => confirmPlayerSelect(id)}
-                      style={{ background:'#f3f4f6', border:'1px solid #e5e7eb', borderRadius:12, padding:'10px 4px', cursor:'pointer', display:'flex', flexDirection:'column', alignItems:'center', gap:4 }}>
-                      <svg viewBox="0 0 24 24" style={{ width:40, height:40, filter:'drop-shadow(0 2px 4px rgba(0,0,0,0.2))' }}>
-                        <path d="M8 3l4 2 4-2 5 3-3 5v10a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V11L3 6l5-3z" fill={color} stroke="rgba(0,0,0,0.15)" strokeWidth="0.5"/>
-                        <text x="12" y="13" textAnchor="middle" fill="white" fontSize="6" fontWeight="bold">
-                          {player?.number || id}
-                        </text>
-                        <text x="12" y="19" textAnchor="middle" fill="rgba(255,255,255,0.85)" fontSize="4">
-                          {player ? getRoleLabel(player.role) : '?'}
-                        </text>
-                      </svg>
-                      <span style={{ color:'#374151', fontSize:11, fontWeight:600, maxWidth:70, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-                        {player?.name || `#${id}`}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-              <button onClick={() => setShowPlayerSelectPopup(null)} style={btnCancel}>
-                <img src="/icons/annuleer.svg" alt="" style={{ width:16, height:16 }} /> Annuleer
-              </button>
-            </div>
-          </div>
-        );
-      })()}
     </>
   );
 }

@@ -7,3 +7,12 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>
 )
+
+// Service worker alleen in productie: in dev zou hij de Vite-HMR-modules cachen.
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {
+      // offline-ondersteuning is een extraatje; falen mag de app niet breken
+    })
+  })
+}

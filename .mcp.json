@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "volleywarrior": {
+      "command": "node",
+      "args": ["mcp-server/src/index.js"]
+    }
+  }
+}

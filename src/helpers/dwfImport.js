@@ -13,15 +13,23 @@ export function isDwfAvailable() {
 
 /**
  * Search clubs from the public Nevobo API.
- * Fetches all pages and filters by name. Caches results for subsequent searches.
+ * Fetches all pages and filters by name. Caches results (met TTL) voor snelle
+ * vervolgzoekopdrachten.
  */
 let clubsCache = null;
+let clubsCachedAt = 0;
+const CLUBS_TTL_MS = 6 * 60 * 60 * 1000; // verenigingenlijst verandert zelden
+
+const PAGE_BATCH = 10;
+const MAX_PAGES = 200; // vangnet: stoppen kan alleen op een lege pagina
 
 export async function searchClubs(query) {
-  if (!clubsCache) {
+  const fresh = clubsCache && Date.now() - clubsCachedAt < CLUBS_TTL_MS;
+  if (!fresh) {
     clubsCache = await fetchAllClubs();
+    clubsCachedAt = Date.now();
   }
-  const q = query.toLowerCase().trim();
+  const q = String(query || '').toLowerCase().trim();
   if (!q) return [];
   return clubsCache.filter(c =>
     c.naam.toLowerCase().includes(q) ||
@@ -30,42 +38,48 @@ export async function searchClubs(query) {
   ).slice(0, 20);
 }
 
+/**
+ * Haalt alle verenigingspagina's op. De API geeft geen totaalaantal meer terug
+ * ('hydra:totalItems' is verdwenen), dus we lezen in blokken door tot er een
+ * lege pagina langskomt.
+ */
 async function fetchAllClubs() {
-  // Fetch first page to get total count
-  const firstRes = await fetch(`${NEVOBO_API}/relatiebeheer/verenigingen?page=1`);
-  if (!firstRes.ok) throw new Error(`Verenigingen ophalen mislukt (${firstRes.status})`);
-  const firstData = await firstRes.json();
+  const clubs = [];
 
-  const totalItems = firstData['hydra:totalItems'] || 0;
-  const perPage = 30;
-  const totalPages = Math.ceil(totalItems / perPage);
-
-  // Parse first page
-  const clubs = parseClubPage(firstData);
-
-  // Fetch remaining pages in batches of 10
-  for (let batch = 0; batch < Math.ceil((totalPages - 1) / 10); batch++) {
-    const start = batch * 10 + 2; // page 2 onwards
-    const end = Math.min(start + 10, totalPages + 1);
-    const promises = [];
-    for (let page = start; page < end; page++) {
-      promises.push(
+  for (let start = 1; start <= MAX_PAGES; start += PAGE_BATCH) {
+    const pages = [];
+    for (let page = start; page < start + PAGE_BATCH && page <= MAX_PAGES; page++) {
+      pages.push(
         fetch(`${NEVOBO_API}/relatiebeheer/verenigingen?page=${page}`)
-          .then(r => r.ok ? r.json() : null)
+          .then(r => (r.ok ? r.json() : null))
+          .then(data => (data == null ? null : parseClubPage(data)))
           .catch(() => null)
       );
     }
-    const results = await Promise.all(promises);
-    for (const data of results) {
-      if (data) clubs.push(...parseClubPage(data));
+
+    const batch = await Promise.all(pages);
+    let sawEmpty = false;
+    for (const parsed of batch) {
+      if (parsed == null) continue;      // pagina mislukt: overslaan, niet stoppen
+      if (parsed.length === 0) { sawEmpty = true; continue; }
+      clubs.push(...parsed);
     }
+    if (sawEmpty) break; // voorbij het einde van de lijst
   }
 
+  if (clubs.length === 0) {
+    throw new Error('Nevobo gaf geen verenigingen terug — mogelijk is het API-formaat opnieuw gewijzigd.');
+  }
   return clubs;
 }
 
+/**
+ * Nevobo levert /relatiebeheer/verenigingen tegenwoordig als kale JSON-array;
+ * vroeger was het een Hydra-collectie met 'hydra:member'. We accepteren beide,
+ * zodat een terugdraai aan hun kant ons niet breekt.
+ */
 function parseClubPage(data) {
-  const members = data['hydra:member'] || [];
+  const members = Array.isArray(data) ? data : (data['hydra:member'] || data.member || []);
   return members.map(m => ({
     code: m.organisatiecode || '',
     naam: m.naam || m.officielenaam || '',

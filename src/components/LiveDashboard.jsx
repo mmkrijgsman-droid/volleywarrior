@@ -1,3 +1,5 @@
+import { analyzeRotations } from '../helpers/proAnalysis';
+
 export default function LiveDashboard({
   homeScore, awayScore, sets, servingTeam,
   teamName, opponentName,
@@ -6,6 +8,7 @@ export default function LiveDashboard({
   homeColor, awayColor,
   playerStats, players,
   proMode, currentRotation,
+  savedHeatmaps = [], heatmapData = [],
 }) {
   const ico = (name, s = 13) => <img src={`/icons/${name}.svg`} alt="" style={{ width: s, height: s, flexShrink: 0 }} />;
   const typeLabels = { direct: ico('ace'), sideout: ico('sideout'), block: ico('blok'), attack: ico('aanval'), error: ico('fout'), servicefault: ico('serve') };
@@ -72,6 +75,32 @@ export default function LiveDashboard({
           );
         })()}
 
+        {/* ── TACTISCHE NUDGE (Pro) ── */}
+        {proMode && (() => {
+          const all = [...savedHeatmaps.flatMap(hm => hm.data || []), ...heatmapData].filter(d => d.rotation != null);
+          if (all.length < 6) return null;
+          const rot = analyzeRotations(all, 'home');
+          let worst = null;
+          for (let r = 1; r <= 6; r++) {
+            const d = rot[r];
+            if (!d) continue;
+            const played = d.pointsFor + d.pointsAgainst;
+            if (played < 3) continue;
+            const diff = d.pointsFor - d.pointsAgainst;
+            if (!worst || diff < worst.diff) worst = { r, diff, ...d };
+          }
+          if (!worst || worst.diff >= 0) return null;
+          const isCurrent = worst.r === currentRotation;
+          return (
+            <div style={{ background: 'rgba(234,179,8,0.1)', border: '1px solid rgba(234,179,8,0.35)', borderRadius: 10, padding: '8px 12px' }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: '#92400e', letterSpacing: 0.5, marginBottom: 2 }}>TACTISCH{isCurrent ? ' · NU' : ''}</div>
+              <div style={{ fontSize: 12, color: '#78350f', fontWeight: 600 }}>
+                Rotatie {worst.r} lekt: {worst.pointsAgainst} tegen / {worst.pointsFor} voor{isCurrent ? ' — je staat er nu in.' : '.'}
+              </div>
+            </div>
+          );
+        })()}
+
         {/* ── BESTE SPELERS ── */}
         <div>
           <div style={{ fontSize: 11, fontWeight: 800, color: '#1e293b', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>Beste Spelers</div>
@@ -112,46 +141,31 @@ export default function LiveDashboard({
           )}
         </div>
 
-        {/* ── SCORINGSSTATISTIEKEN ── */}
+        {/* ── SCORINGSSTATISTIEKEN (eigen team focus) ── */}
         <div>
-          <div style={{ fontSize: 11, fontWeight: 800, color: '#1e293b', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>Scoringsstatistieken</div>
+          <div style={{ fontSize: 11, fontWeight: 800, color: '#1e293b', letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>{teamName || 'Ons Team'}</div>
 
-          {/* Team headers */}
-          <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6, padding: '0 4px' }}>
-            <span style={{ flex: 1, fontSize: 10, fontWeight: 700, color: homeColor }}>{teamName || 'THUIS'} ({totalHome})</span>
-            <span style={{ width: 50 }} />
-            <span style={{ flex: 1, fontSize: 10, fontWeight: 700, color: awayColor, textAlign: 'right' }}>{opponentName || 'TEG'} ({totalAway})</span>
-          </div>
-
-          {/* Stat bars — mirrored */}
+          {/* Home team detailed breakdown */}
           {statTypes.map(({ key, label, icon }) => {
             const hVal = pointStats.home[key] || 0;
-            const aVal = pointStats.away[key] || 0;
-            const max = Math.max(hVal, aVal, 1);
+            const max = Math.max(...statTypes.map(t => pointStats.home[t.key] || 0), 1);
             return (
-              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 5, padding: '0 4px' }}>
-                {/* Home bar (right-aligned) */}
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: hVal > aVal ? homeColor : '#9ca3af' }}>{hVal}</span>
-                  <div style={{ width: 80, height: 10, borderRadius: 3, background: 'rgba(0,0,0,0.04)', overflow: 'hidden', display: 'flex', justifyContent: 'flex-end' }}>
-                    <div style={{ height: '100%', borderRadius: 3, background: homeColor, opacity: 0.7, width: `${(hVal / max) * 100}%`, transition: 'width 0.3s' }} />
-                  </div>
-                </div>
-                {/* Label center */}
-                <div style={{ width: 50, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
+              <div key={key} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 5, padding: '0 4px' }}>
+                <div style={{ width: 44, display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>
                   {ico(icon, 12)}
                   <span style={{ fontSize: 9, fontWeight: 600, color: '#6b7280' }}>{label}</span>
                 </div>
-                {/* Away bar (left-aligned) */}
-                <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <div style={{ width: 80, height: 10, borderRadius: 3, background: 'rgba(0,0,0,0.04)', overflow: 'hidden' }}>
-                    <div style={{ height: '100%', borderRadius: 3, background: awayColor, opacity: 0.7, width: `${(aVal / max) * 100}%`, transition: 'width 0.3s' }} />
-                  </div>
-                  <span style={{ fontSize: 10, fontWeight: 700, color: aVal > hVal ? awayColor : '#9ca3af' }}>{aVal}</span>
+                <div style={{ flex: 1, height: 10, borderRadius: 3, background: 'rgba(0,0,0,0.04)', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', borderRadius: 3, background: homeColor, opacity: 0.7, width: `${(hVal / max) * 100}%`, transition: 'width 0.3s' }} />
                 </div>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#1e293b', minWidth: 18, textAlign: 'right' }}>{hVal}</span>
               </div>
             );
           })}
+          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 4px 0', borderTop: '1px solid rgba(0,0,0,0.06)', marginTop: 4 }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: homeColor }}>Totaal: {totalHome}</span>
+            <span style={{ fontSize: 10, fontWeight: 600, color: '#9ca3af' }}>{opponentName || 'TEG'}: {totalAway}</span>
+          </div>
         </div>
 
         {/* ── PUNTENVERLOOP ── */}

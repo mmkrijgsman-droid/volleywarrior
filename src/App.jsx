@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import useMatchState from './hooks/useMatchState';
+import useMcpBridge from './helpers/mcpBridge';
+import useVoiceScoring from './helpers/useVoiceScoring';
 import { TABS } from './helpers/constants';
 import BottomSheet from './components/BottomSheet';
 import { renderHomeLineup, renderAwayLineup } from './components/Court';
@@ -7,6 +9,7 @@ import Modals from './components/Modals';
 import ProPanel from './components/ProPanel';
 import LiveDashboard from './components/LiveDashboard';
 import PinchZoomCourt from './components/PinchZoomCourt';
+import { MicIcon } from './components/Icons';
 import { LOGO_SRC } from './assets/logo';
 
 import PlayersTab from './tabs/PlayersTab';
@@ -14,6 +17,8 @@ import LineupTab from './tabs/LineupTab';
 import SubsTab from './tabs/SubsTab';
 import StatsTab from './tabs/StatsTab';
 import MatchesTab from './tabs/MatchesTab';
+import SeasonTab from './tabs/SeasonTab';
+import PrognoseTab from './tabs/PrognoseTab';
 
 // ─── VOLLEYBALL TRACKER ───────────────────────────────────────────────────────
 export default function VolleyballTracker() {
@@ -26,8 +31,12 @@ export default function VolleyballTracker() {
     return () => { clearTimeout(fadeTimer); clearTimeout(hideTimer); };
   }, []);
   const state = useMatchState();
+  // Live-brug naar de MCP-server. Doet niets tenzij localStorage.vwMcpBridge === '1'.
+  useMcpBridge(state);
+  // Handsfree scoren via spraak (Web Speech API); doet niets tot de gebruiker aanzet.
+  const voice = useVoiceScoring(state);
   const {
-    isMobile, isTablet, isPortrait, bottomSheetOpen, setBottomSheetOpen, activeTab, setActiveTab,
+    isTablet, isPortrait, bottomSheetOpen, setBottomSheetOpen, activeTab, setActiveTab,
     players, setPlayers, updatePlayer, addPlayer,
     homeLineup, awayLineup, updateLineup, confirmLineup,
     homeScore, awayScore, sets, servingTeam,
@@ -65,13 +74,17 @@ export default function VolleyballTracker() {
       case 'players':
         return <PlayersTab players={players} updatePlayer={updatePlayer} addPlayer={addPlayer} setPlayers={setPlayers} homeColor={homeColor} setHomeColor={setHomeColor} awayColor={awayColor} setAwayColor={setAwayColor} setShowDwfImportModal={state.setShowDwfImportModal} />;
       case 'lineup':
-        return <LineupTab players={players} homeLineup={homeLineup} awayLineup={awayLineup} updateLineup={updateLineup} teamName={teamName} setTeamName={setTeamName} opponentName={opponentName} setOpponentName={setOpponentName} confirmLineup={confirmLineup} formationSystem={formationSystem} switchFormation={switchFormation} opponentPlayers={state.opponentPlayers} setShowDwfImportModal={state.setShowDwfImportModal} />;
+        return <LineupTab players={players} homeLineup={homeLineup} awayLineup={awayLineup} updateLineup={updateLineup} setHomeLineup={state.setHomeLineup} savedMatches={savedMatches} teamName={teamName} setTeamName={setTeamName} opponentName={opponentName} setOpponentName={setOpponentName} confirmLineup={confirmLineup} formationSystem={formationSystem} switchFormation={switchFormation} opponentPlayers={state.opponentPlayers} setShowDwfImportModal={state.setShowDwfImportModal} />;
       case 'subs':
         return <SubsTab substitutions={substitutions} benchPlayers={benchPlayers} players={players} selectedBenchPlayer={selectedBenchPlayer} setSubstitutionMode={setSubstitutionMode} setSelectedBenchPlayer={setSelectedBenchPlayer} setBottomSheetOpen={setBottomSheetOpen} showAlert={showAlert} />;
       case 'stats':
-        return <StatsTab heatmapData={heatmapData} savedHeatmaps={savedHeatmaps} showHeatmapOverlay={showHeatmapOverlay} setShowHeatmapOverlay={setShowHeatmapOverlay} opponentName={opponentName} teamName={teamName} pointStats={pointStats} playerStats={state.playerStats} players={players} setShowSettingsModal={state.setShowSettingsModal} trackOpponentStats={state.trackOpponentStats} proMode={state.proMode} scoreHistory={scoreHistory} />;
+        return <StatsTab heatmapData={heatmapData} savedHeatmaps={savedHeatmaps} showHeatmapOverlay={showHeatmapOverlay} setShowHeatmapOverlay={setShowHeatmapOverlay} opponentName={opponentName} teamName={teamName} pointStats={pointStats} playerStats={state.playerStats} players={players} setShowSettingsModal={state.setShowSettingsModal} trackOpponentStats={state.trackOpponentStats} proMode={state.proMode} scoreHistory={scoreHistory} correctPointPlayer={state.correctPointPlayer} />;
       case 'matches':
         return <MatchesTab homeScore={homeScore} awayScore={awayScore} sets={sets} opponentName={opponentName} savedMatches={savedMatches} loadMatch={loadMatch} setShowNewMatchDialog={setShowNewMatchDialog} teamName={teamName} players={players} forceEndMatch={state.forceEndMatch} matchEnded={state.matchEnded} deleteMatch={state.deleteMatch} />;
+      case 'season':
+        return <SeasonTab savedMatches={savedMatches} players={players} teamName={teamName} />;
+      case 'prognose':
+        return <PrognoseTab savedMatches={savedMatches} />;
       default: return null;
     }
   };
@@ -102,6 +115,13 @@ export default function VolleyballTracker() {
       </button>
 
 
+      {/* Voice-scoren indicator */}
+      {(voice.listening || voice.error) && (
+        <div style={{ position:'fixed', top:2, left:'50%', transform:'translateX(-50%)', zIndex:100, background: voice.error ? 'rgba(120,53,15,0.95)' : 'rgba(220,38,38,0.92)', color:'#fff', fontSize:10, fontWeight:700, padding:'2px 10px', borderRadius:10, maxWidth:'70vw', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
+          {voice.error ? `⚠️ ${voice.error}` : `🎤 ${voice.lastHeard || 'luisteren…'}`}
+        </div>
+      )}
+
       {/* Confetti */}
       {confetti.map(c => (
         <div key={c.id} style={{ position:'fixed', left:`${c.left}%`, top:'-10px', width:10, height:10, background:'#fbbf24', borderRadius:'50%', pointerEvents:'none', zIndex:100, animation:`bounce 0.6s ${c.delay}s infinite` }} />
@@ -110,32 +130,43 @@ export default function VolleyballTracker() {
       {/* ── SCORE BAR ── */}
       <div style={{ flexShrink:0, zIndex:60, position:'relative' }}>
         {/* Score — bovenste rij */}
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', padding:'6px 10px 2px', gap:8 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'flex-end', padding: isTabletLandscape ? '2px 10px 0' : '6px 10px 2px', gap:8 }}>
+          {/* Voice scoring toggle */}
+          {voice.supported && (
+            <button
+              onClick={voice.toggle}
+              title={voice.listening ? 'Stem-scoren aan (tik om te stoppen)' : 'Stem-scoren'}
+              style={{ background: voice.listening ? '#dc2626' : 'rgba(255,255,255,0.85)', border:`1.5px solid ${voice.listening ? '#dc2626' : 'rgba(255,255,255,0.9)'}`, borderRadius:8, padding: isTabletLandscape ? '2px 6px' : '4px 7px', cursor:'pointer', color: voice.listening ? '#fff' : '#dc2626', display:'flex', alignItems:'center', boxShadow:'0 1px 4px rgba(0,0,0,0.15)', animation: voice.listening ? 'bannerPulse 1.4s ease-in-out infinite' : 'none' }}
+            >
+              <MicIcon size={isTabletLandscape ? 12 : 14} />
+            </button>
+          )}
+
           {/* Pro Mode toggle */}
           <button
             onClick={() => state.setProMode(v => !v)}
-            style={{ background: state.proMode ? '#dc2626' : 'rgba(255,255,255,0.85)', border: `1.5px solid ${state.proMode ? '#dc2626' : 'rgba(255,255,255,0.9)'}`, borderRadius:8, padding:'4px 10px', cursor:'pointer', color: state.proMode ? '#fff' : '#dc2626', fontSize:10, fontWeight:800, letterSpacing:0.5, transition:'all 0.2s', flexShrink:0, boxShadow:'0 1px 4px rgba(0,0,0,0.15)' }}
+            style={{ background: state.proMode ? '#dc2626' : 'rgba(255,255,255,0.85)', border: `1.5px solid ${state.proMode ? '#dc2626' : 'rgba(255,255,255,0.9)'}`, borderRadius:8, padding: isTabletLandscape ? '2px 8px' : '4px 10px', cursor:'pointer', color: state.proMode ? '#fff' : '#dc2626', fontSize: isTabletLandscape ? 9 : 10, fontWeight:800, letterSpacing:0.5, transition:'all 0.2s', flexShrink:0, boxShadow:'0 1px 4px rgba(0,0,0,0.15)' }}
           >
             PRO
           </button>
           <div style={{ position:'relative' }}>
             <div
               onClick={() => setShowHistoryDropdown(v => !v)}
-              style={{ display:'flex', alignItems:'center', gap:8, background:'rgba(255,255,255,0.08)', borderRadius:12, padding:'5px 12px', border:`1px solid rgba(255,255,255,${showHistoryDropdown ? 0.3 : 0.1})`, cursor:'pointer', userSelect:'none' }}
+              style={{ display:'flex', alignItems:'center', gap: isTabletLandscape ? 5 : 8, background:'rgba(255,255,255,0.08)', borderRadius:12, padding: isTabletLandscape ? '3px 8px' : '5px 12px', border:`1px solid rgba(255,255,255,${showHistoryDropdown ? 0.3 : 0.1})`, cursor:'pointer', userSelect:'none' }}
             >
               <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
-                <span style={{ fontSize:22, fontWeight:900, color:'#f87171', lineHeight:1 }}>{homeScore}</span>
-                <span style={{ fontSize:9, color:'#6b7280' }}>{teamName||'THUIS'}</span>
+                <span style={{ fontSize: isTabletLandscape ? 16 : 22, fontWeight:900, color:'#f87171', lineHeight:1 }}>{homeScore}</span>
+                <span style={{ fontSize: isTabletLandscape ? 8 : 9, color:'#6b7280' }}>{teamName||'THUIS'}</span>
               </div>
               <div style={{ display:'flex', flexDirection:'column', alignItems:'center', padding:'0 2px' }}>
-                <span style={{ color:'#374151', fontSize:14, fontWeight:700 }}>–</span>
-                <span style={{ fontSize:9, color:'#6b7280' }}>{sets.home}:{sets.away}</span>
+                <span style={{ color:'#374151', fontSize: isTabletLandscape ? 11 : 14, fontWeight:700 }}>–</span>
+                <span style={{ fontSize: isTabletLandscape ? 8 : 9, color:'#6b7280' }}>{sets.home}:{sets.away}</span>
               </div>
               <div style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
-                <span style={{ fontSize:22, fontWeight:900, color:'#60a5fa', lineHeight:1 }}>{awayScore}</span>
-                <span style={{ fontSize:9, color:'#6b7280' }}>{opponentName||'TEG'}</span>
+                <span style={{ fontSize: isTabletLandscape ? 16 : 22, fontWeight:900, color:'#60a5fa', lineHeight:1 }}>{awayScore}</span>
+                <span style={{ fontSize: isTabletLandscape ? 8 : 9, color:'#6b7280' }}>{opponentName||'TEG'}</span>
               </div>
-              <span style={{ color:'#6b7280', fontSize:10, marginLeft:2 }}>{showHistoryDropdown ? '▲' : '▼'}</span>
+              <span style={{ color:'#6b7280', fontSize: isTabletLandscape ? 8 : 10, marginLeft:2 }}>{showHistoryDropdown ? '▲' : '▼'}</span>
             </div>
 
             {/* Dropdown verloop */}
@@ -165,7 +196,7 @@ export default function VolleyballTracker() {
       <div style={{ flex:1, display:'flex', flexDirection: isTabletLandscape ? 'row' : 'column', overflow:'hidden', position:'relative' }}>
 
         {/* ── COURT ── */}
-        <div style={{ flex: isTabletLandscape ? '0 0 60%' : (isTabletPortrait ? '0 0 auto' : 1), display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}>
+        <div style={{ flex: isTabletLandscape ? '0 0 65%' : (isTabletPortrait ? '0 0 auto' : 1), display:'flex', flexDirection:'column', overflow:'hidden', position:'relative' }}>
           {/* Vorige punten + undo — zwevend over speelveld (niet in landscape tablet) */}
           {!isTabletLandscape && scoreHistory.length > 0 && (
             <div style={{ position:'absolute', top:8, right:8, zIndex:55, display:'flex', flexDirection:'column', alignItems:'flex-end', gap:3 }}>
@@ -184,7 +215,7 @@ export default function VolleyballTracker() {
             </div>
           )}
           <PinchZoomCourt>
-            <div style={{ position:'relative', width: isTabletLandscape ? 'min(calc(60vw - 16px), calc((100vh - 200px) * 0.55))' : 'min(calc(100vw - 8px), calc((100vh - 200px) * 0.55))', height: isTabletLandscape ? 'min(calc((60vw - 16px) / 0.55), calc(100vh - 200px))' : isTabletPortrait ? 'min(calc((100vw - 8px) / 0.55), calc(60vh - 100px))' : 'min(calc((100vw - 8px) / 0.55), calc(100vh - 200px))', maxHeight: isTabletPortrait ? 'calc(60vh - 60px)' : 'calc(100vh - 140px)' }}>
+            <div style={{ position:'relative', width: isTabletLandscape ? 'min(calc(65vw - 16px), calc((100vh - 60px) * 0.55))' : 'min(calc(100vw - 8px), calc((100vh - 200px) * 0.55))', height: isTabletLandscape ? 'min(calc((65vw - 16px) / 0.55), calc(100vh - 60px))' : isTabletPortrait ? 'min(calc((100vw - 8px) / 0.55), calc(60vh - 100px))' : 'min(calc((100vw - 8px) / 0.55), calc(100vh - 200px))', maxHeight: isTabletLandscape ? 'calc(100vh - 50px)' : isTabletPortrait ? 'calc(60vh - 60px)' : 'calc(100vh - 140px)' }}>
 
               {/* Attack lines toggle */}
               {heatmapData.some(d => d.playerPos != null && d.type !== 'direct' && d.type !== 'servicefault') && (
@@ -322,13 +353,14 @@ export default function VolleyballTracker() {
               homeColor={homeColor} awayColor={awayColor}
               playerStats={state.playerStats} players={players}
               proMode={state.proMode} currentRotation={state.getRotation()}
+              savedHeatmaps={savedHeatmaps} heatmapData={heatmapData}
             />
           </div>
         )}
 
         {/* ── TABLET LANDSCAPE SIDEBAR ── */}
         {isTabletLandscape && (
-          <div style={{ flex:'0 0 40%', display:'flex', flexDirection:'column', height:'100%', background:'rgba(255,255,255,0.85)', backdropFilter:'blur(20px) saturate(180%)', WebkitBackdropFilter:'blur(20px) saturate(180%)', borderLeft:'1px solid rgba(0,0,0,0.08)', overflow:'hidden' }}>
+          <div style={{ flex:'0 0 35%', display:'flex', flexDirection:'column', height:'100%', background:'rgba(255,255,255,0.85)', backdropFilter:'blur(20px) saturate(180%)', WebkitBackdropFilter:'blur(20px) saturate(180%)', borderLeft:'1px solid rgba(0,0,0,0.08)', overflow:'hidden' }}>
             <LiveDashboard
               homeScore={homeScore} awayScore={awayScore} sets={sets} servingTeam={servingTeam}
               teamName={teamName} opponentName={opponentName}
@@ -337,6 +369,7 @@ export default function VolleyballTracker() {
               homeColor={homeColor} awayColor={awayColor}
               playerStats={state.playerStats} players={players}
               proMode={state.proMode} currentRotation={state.getRotation()}
+              savedHeatmaps={savedHeatmaps} heatmapData={heatmapData}
             />
           </div>
         )}

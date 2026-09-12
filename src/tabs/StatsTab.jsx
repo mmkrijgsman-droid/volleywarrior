@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { SettingsIcon } from '../components/Icons';
+import PointLog from '../components/PointLog';
 import { SERVE_ZONES, RECEPTION_LABELS } from '../helpers/constants';
 import { analyzeRotations, analyzeReception, analyzeAttackEfficiency, analyzeServeZones, findScoringRuns } from '../helpers/proAnalysis';
 
@@ -19,7 +20,7 @@ function getLandingSvg(team, x, y) {
   return team === 'home' ? { x, y: y * 0.5 } : { x, y: 50 + y * 0.5 };
 }
 
-export default function StatsTab({ heatmapData, savedHeatmaps, showHeatmapOverlay, setShowHeatmapOverlay, opponentName, teamName, pointStats, playerStats, players, setShowSettingsModal, trackOpponentStats, proMode, scoreHistory }) {
+export default function StatsTab({ heatmapData, savedHeatmaps, showHeatmapOverlay, setShowHeatmapOverlay, opponentName, teamName, pointStats, playerStats, players, setShowSettingsModal, trackOpponentStats, proMode, scoreHistory, correctPointPlayer }) {
   const [attackLineSet, setAttackLineSet] = useState(null);
   const [attackLinePlayer, setAttackLinePlayer] = useState(null);
 
@@ -45,6 +46,7 @@ export default function StatsTab({ heatmapData, savedHeatmaps, showHeatmapOverla
         </button>
       </div>
       <div style={{ color:'#6b7280', fontSize:12, marginBottom:12 }}>Punten: {heatmapData.length} deze set</div>
+      <PointLog scoreHistory={scoreHistory} players={players} correctPointPlayer={correctPointPlayer} />
       {savedHeatmaps.length > 0 ? savedHeatmaps.map((hm, i) => (
         <div key={i} style={{ marginBottom:12 }}>
           <div
@@ -375,30 +377,21 @@ export default function StatsTab({ heatmapData, savedHeatmaps, showHeatmapOverla
               );
             })()}
 
-            {/* Tegenstander per Positie */}
+            {/* Tegenstander per Positie (compact) */}
             {awayEntries.length > 0 && (
               <>
-                <div style={{ color:'#1e293b', fontWeight:700, fontSize:14, marginBottom:12, marginTop:16 }}>Tegenstander per Positie</div>
-                {awayEntries.map(({ id, label, short, stats, total }) => (
-                  <div key={id} style={{ background:'rgba(0,0,0,0.02)', border:'1px solid rgba(0,0,0,0.06)', borderRadius:12, padding:'12px 14px', marginBottom:10 }}>
-                    <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:8 }}>
-                      <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-                        <span style={{ background:'rgba(37,99,235,0.1)', color:'#2563eb', borderRadius:6, padding:'2px 8px', fontSize:13, fontWeight:800 }}>
-                          {short}
-                        </span>
-                        <span style={{ color:'#1e293b', fontWeight:700, fontSize:13 }}>{label}</span>
+                <div style={{ color:'#6b7280', fontWeight:600, fontSize:12, marginBottom:8, marginTop:16 }}>Tegenstander per Positie</div>
+                <div style={{ background:'rgba(0,0,0,0.02)', border:'1px solid rgba(0,0,0,0.06)', borderRadius:12, padding:'10px 12px', marginBottom:12 }}>
+                  {awayEntries.map(({ id, short, label, total }) => (
+                    <div key={id} style={{ display:'flex', alignItems:'center', justifyContent:'space-between', padding:'4px 0', borderBottom:'1px solid rgba(0,0,0,0.04)' }}>
+                      <div style={{ display:'flex', alignItems:'center', gap:6 }}>
+                        <span style={{ background:'rgba(37,99,235,0.1)', color:'#2563eb', borderRadius:4, padding:'1px 6px', fontSize:10, fontWeight:800 }}>{short}</span>
+                        <span style={{ color:'#6b7280', fontSize:11 }}>{label}</span>
                       </div>
-                      <span style={{ color:'#6b7280', fontSize:12, fontWeight:600 }}>{total} totaal</span>
+                      <span style={{ color:'#374151', fontSize:11, fontWeight:700 }}>{total}</span>
                     </div>
-                    <div style={{ display:'flex', flexWrap:'wrap', gap:6 }}>
-                      {Object.entries(stats).filter(([,v]) => v > 0).map(([key, val]) => (
-                        <div key={key} style={{ background:'rgba(0,0,0,0.03)', border:'1px solid rgba(0,0,0,0.06)', borderRadius:6, padding:'3px 8px', fontSize:11, color:'#374151' }}>
-                          {typeLabels[key] || key}: <span style={{ fontWeight:700, color:'#1e293b' }}>{val}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </>
             )}
           </>

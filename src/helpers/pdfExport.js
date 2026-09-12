@@ -1,5 +1,5 @@
 import { jsPDF } from 'jspdf';
-import { getRoleLabel, SERVE_ZONES, RECEPTION_LABELS } from './constants';
+import { SERVE_ZONES } from './constants';
 import { analyzeRotations, analyzeReception, analyzeAttackEfficiency, analyzeServeZones, findScoringRuns } from './proAnalysis';
 import { Capacitor } from '@capacitor/core';
 import { Filesystem, Directory } from '@capacitor/filesystem';
@@ -161,11 +161,72 @@ export function generateMatchPDF({ sets, matchWinner, opponentName, teamName, ma
   tableRow(['Set', 'Score', 'Winnaar', 'TO Thuis', 'TO Uit'], setCols, true);
   savedHeatmaps.forEach((hm) => {
     const winner = hm.winner === 'home' ? homeTeam : awayTeam;
-    const hTO = (hm.homeTimeouts || []).join(', ') || '-';
-    const aTO = (hm.awayTimeouts || []).join(', ') || '-';
+    const fmtTO = arr => (arr || []).map(t => typeof t === 'string' ? t : (t?.score || JSON.stringify(t))).join(', ') || '-';
+    const hTO = fmtTO(hm.homeTimeouts);
+    const aTO = fmtTO(hm.awayTimeouts);
     tableRow([hm.setNumber, hm.finalScore, winner, hTO, aTO], setCols, false, hm.setNumber % 2 === 0 ? [245, 247, 250] : null);
   });
   y += 6;
+
+  // ── BESTE SPELERS ──
+  if (playerStats && players) {
+    const homeScorers = [];
+    Object.entries(playerStats).forEach(([id, stats]) => {
+      if (String(id).startsWith('opp_')) return;
+      const player = players.find(p => p.id === Number(id));
+      if (!player) return;
+      const scored = (stats.direct||0) + (stats.sideout||0) + (stats.block||0) + (stats.attack||0);
+      if (scored > 0) homeScorers.push({ player, scored, stats });
+    });
+    homeScorers.sort((a,b) => b.scored - a.scored);
+
+    // Beste passer (receptie) — from Pro data in heatmaps
+    const allHeatmap = savedHeatmaps.flatMap(h => h.data || []);
+    const receptionByPlayer = {};
+    allHeatmap.forEach(d => {
+      if (!d.receptionQuality || !d.receptionPlayerId) return;
+      if (!receptionByPlayer[d.receptionPlayerId]) receptionByPlayer[d.receptionPlayerId] = { A:0, B:0, C:0, total:0 };
+      receptionByPlayer[d.receptionPlayerId][d.receptionQuality]++;
+      receptionByPlayer[d.receptionPlayerId].total++;
+    });
+    let bestPasser = null;
+    let bestPasserScore = -1;
+    Object.entries(receptionByPlayer).forEach(([id, rec]) => {
+      if (rec.total < 2) return;
+      const score = (rec.A * 3 + rec.B * 1) / rec.total; // weighted score
+      if (score > bestPasserScore) {
+        bestPasserScore = score;
+        const p = players.find(pl => pl.id === Number(id));
+        if (p) bestPasser = { player: p, rec };
+      }
+    });
+
+    if (homeScorers.length > 0 || bestPasser) {
+      sectionHeader('Beste Spelers');
+      const bpCols = [CW * 0.35, CW * 0.65];
+
+      if (homeScorers.length > 0) {
+        const top = homeScorers[0];
+        const details = [
+          top.stats.direct > 0 ? `${top.stats.direct} ace` : '',
+          top.stats.sideout > 0 ? `${top.stats.sideout} sideout` : '',
+          top.stats.block > 0 ? `${top.stats.block} blok` : '',
+          top.stats.attack > 0 ? `${top.stats.attack} aanval` : '',
+        ].filter(Boolean).join(', ');
+        tableRow(['Topscorer', `#${top.player.number} ${top.player.name} — ${top.scored} punten (${details})`], bpCols, false, colors.redLight);
+      }
+
+      if (bestPasser) {
+        const { player: p, rec } = bestPasser;
+        const pct = rec.total > 0 ? Math.round(rec.A / rec.total * 100) : 0;
+        tableRow(['Beste passer', `#${p.number} ${p.name} — ${pct}% perfect (${rec.A}A / ${rec.B}B / ${rec.C}C, ${rec.total} totaal)`], bpCols, false, [242, 247, 255]);
+      } else if (homeScorers.length > 0) {
+        tableRow(['Beste passer', 'Geen receptie-data (activeer Pro Modus)'], bpCols, false, [245, 247, 250]);
+      }
+
+      y += 6;
+    }
+  }
 
   // Totaal puntstatistieken
   sectionHeader('Puntstatistieken (totaal)');
@@ -485,7 +546,6 @@ export function generateMatchPDF({ sets, matchWinner, opponentName, teamName, ma
 
       // Helper: draw one court
       const drawCourt = (cx) => {
-        const netY = cx === cx ? courtY + courtH / 2 : 0; // just for readability
         const nY = courtY + courtH / 2;
         // Away half (top)
         doc.setFillColor(220, 225, 235);
@@ -587,8 +647,9 @@ export function generateMatchPDF({ sets, matchWinner, opponentName, teamName, ma
         doc.text('Timeouts:', ML, y + 4);
         doc.setFont('helvetica', 'normal');
         const toTexts = [];
-        if (hm.homeTimeouts?.length) toTexts.push(`${homeTeam}: ${hm.homeTimeouts.join(', ')}`);
-        if (hm.awayTimeouts?.length) toTexts.push(`${awayTeam}: ${hm.awayTimeouts.join(', ')}`);
+        const fmtTO2 = arr => (arr || []).map(t => typeof t === 'string' ? t : (t?.score || JSON.stringify(t))).join(', ');
+        if (hm.homeTimeouts?.length) toTexts.push(`${homeTeam}: ${fmtTO2(hm.homeTimeouts)}`);
+        if (hm.awayTimeouts?.length) toTexts.push(`${awayTeam}: ${fmtTO2(hm.awayTimeouts)}`);
         doc.text(toTexts.join('  |  '), ML + 22, y + 4);
         y += 8;
       }

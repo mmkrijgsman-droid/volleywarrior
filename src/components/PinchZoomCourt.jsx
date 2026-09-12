@@ -3,10 +3,16 @@ import { useState, useRef, useCallback } from 'react';
 export default function PinchZoomCourt({ children }) {
   const [scale, setScale] = useState(1);
   const [translate, setTranslate] = useState({ x: 0, y: 0 });
+  const scaleRef = useRef(1);
+  const translateRef = useRef({ x: 0, y: 0 });
   const pinchRef = useRef(null);
   const panRef = useRef(null);
   const lastTapRef = useRef(0);
   const containerRef = useRef(null);
+
+  // Keep refs in sync with state
+  const updateScale = (s) => { scaleRef.current = s; setScale(s); };
+  const updateTranslate = (t) => { translateRef.current = t; setTranslate(t); };
 
   const getDistance = (t1, t2) =>
     Math.hypot(t2.clientX - t1.clientX, t2.clientY - t1.clientY);
@@ -29,8 +35,8 @@ export default function PinchZoomCourt({ children }) {
   }, []);
 
   const resetZoom = useCallback(() => {
-    setScale(1);
-    setTranslate({ x: 0, y: 0 });
+    updateScale(1);
+    updateTranslate({ x: 0, y: 0 });
   }, []);
 
   const handleTouchStart = useCallback((e) => {
@@ -38,8 +44,8 @@ export default function PinchZoomCourt({ children }) {
       e.preventDefault();
       const dist = getDistance(e.touches[0], e.touches[1]);
       const mid = getMidpoint(e.touches[0], e.touches[1]);
-      pinchRef.current = { initialDist: dist, initialScale: scale };
-      panRef.current = { startX: mid.x, startY: mid.y, initialTx: translate.x, initialTy: translate.y };
+      pinchRef.current = { initialDist: dist, initialScale: scaleRef.current };
+      panRef.current = { startX: mid.x, startY: mid.y, initialTx: translateRef.current.x, initialTy: translateRef.current.y };
     } else if (e.touches.length === 1) {
       const now = Date.now();
       if (now - lastTapRef.current < 300) {
@@ -48,12 +54,11 @@ export default function PinchZoomCourt({ children }) {
         return;
       }
       lastTapRef.current = now;
-      // Track single-finger pan when zoomed
-      if (scale > 1) {
-        panRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, initialTx: translate.x, initialTy: translate.y, singleFinger: true };
+      if (scaleRef.current > 1) {
+        panRef.current = { startX: e.touches[0].clientX, startY: e.touches[0].clientY, initialTx: translateRef.current.x, initialTy: translateRef.current.y, singleFinger: true };
       }
     }
-  }, [scale, translate, resetZoom]);
+  }, [resetZoom]);
 
   const handleTouchMove = useCallback((e) => {
     if (e.touches.length === 2 && pinchRef.current) {
@@ -64,23 +69,23 @@ export default function PinchZoomCourt({ children }) {
       const dx = mid.x - panRef.current.startX;
       const dy = mid.y - panRef.current.startY;
       const newT = clampTranslate(panRef.current.initialTx + dx, panRef.current.initialTy + dy, newScale);
-      setScale(newScale);
-      setTranslate(newT);
-    } else if (e.touches.length === 1 && panRef.current?.singleFinger && scale > 1) {
+      updateScale(newScale);
+      updateTranslate(newT);
+    } else if (e.touches.length === 1 && panRef.current?.singleFinger && scaleRef.current > 1) {
       const dx = e.touches[0].clientX - panRef.current.startX;
       const dy = e.touches[0].clientY - panRef.current.startY;
-      const newT = clampTranslate(panRef.current.initialTx + dx, panRef.current.initialTy + dy, scale);
-      setTranslate(newT);
+      const newT = clampTranslate(panRef.current.initialTx + dx, panRef.current.initialTy + dy, scaleRef.current);
+      updateTranslate(newT);
     }
-  }, [scale, clampTranslate]);
+  }, [clampTranslate]);
 
   const handleTouchEnd = useCallback((e) => {
     if (e.touches.length < 2) pinchRef.current = null;
     if (e.touches.length === 0) {
       if (panRef.current?.singleFinger) panRef.current = null;
-      if (scale <= 1) { setScale(1); setTranslate({ x: 0, y: 0 }); }
+      if (scaleRef.current <= 1) { updateScale(1); updateTranslate({ x: 0, y: 0 }); }
     }
-  }, [scale]);
+  }, []);
 
   return (
     <div
